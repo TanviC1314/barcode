@@ -3,17 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>1D Barcode Scanner</title>
+  <title>Barcode and QR Code Scanner</title>
   <style>
-    #scanner-container {
-      position: relative;
+    video {
       width: 100%;
       height: auto;
     }
     canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
+      display: none;
     }
     #output {
       font-size: 1.5rem;
@@ -23,23 +20,37 @@
   </style>
 </head>
 <body>
-  <h1>Scan Barcode</h1>
+  <h1>1Scan Barcode or QR Code</h1>
   <div id="scanner-container"></div>
-  <div id="output">Waiting for barcode...</div>
+  <video id="video" autoplay></video>
+  <canvas id="canvas"></canvas>
+  <div id="output">Waiting for barcode or QR code...</div>
 
+  <!-- Include jsQR -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <!-- Include QuaggaJS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
     const output = document.getElementById('output');
+    const canvasContext = canvas.getContext('2d');
 
+    // Start both scanners
+    function startScanners() {
+      startBarcodeScanner();
+      startQRScanner();
+    }
+
+    // QuaggaJS for 1D Barcode Scanning
     function startBarcodeScanner() {
       Quagga.init({
         inputStream: {
           type: "LiveStream",
           constraints: {
-            facingMode: "environment" // Use the back camera
+            facingMode: "environment" // Use back camera
           },
-          target: document.getElementById('scanner-container') // Attach the video stream here
+          target: document.getElementById('scanner-container') // Attach the video stream
         },
         decoder: {
           readers: [
@@ -52,20 +63,54 @@
       }, function (err) {
         if (err) {
           console.error(err);
-          output.textContent = "Unable to access the camera.";
+          output.textContent = "Unable to access the camera for barcode.";
           return;
         }
         Quagga.start();
-        output.textContent = "Waiting for barcode...";
+        output.textContent = "Waiting for barcode or QR code...";
       });
 
       Quagga.onDetected(function (data) {
-        output.textContent = `Detected: ${data.codeResult.code}`;
+        output.textContent = `Detected Barcode: ${data.codeResult.code}`;
         Quagga.stop(); // Stop scanning after a barcode is detected
       });
     }
 
-    startBarcodeScanner();
+    // jsQR for QR Code Scanning
+    async function startQRScanner() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment" // Use back camera
+          }
+        });
+        video.srcObject = stream;
+        video.play();
+        scanQR();
+      } catch (error) {
+        console.error("Error accessing the camera for QR code", error);
+        output.textContent = "Unable to access the camera for QR code.";
+      }
+    }
+
+    function scanQR() {
+      requestAnimationFrame(scanQR);
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+        if (code) {
+          output.textContent = `Detected QR Code: ${code.data}`;
+        }
+      }
+    }
+
+    // Start both scanners
+    startScanners();
   </script>
 </body>
 </html>
