@@ -5,11 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barcode and QR Code Scanner</title>
   <style>
-    video {
+    #scanner-container {
+      position: relative;
       width: 100%;
       height: auto;
     }
     canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
       display: none;
     }
     #output {
@@ -20,37 +24,29 @@
   </style>
 </head>
 <body>
-  <h1>1Scan Barcode or QR Code</h1>
+  <h1>Scan Barcode or QR Code</h1>
   <div id="scanner-container"></div>
-  <video id="video" autoplay></video>
   <canvas id="canvas"></canvas>
   <div id="output">Waiting for barcode or QR code...</div>
 
-  <!-- Include jsQR -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <!-- Include QuaggaJS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- Include jsQR -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
     const output = document.getElementById('output');
+    const canvas = document.getElementById('canvas');
     const canvasContext = canvas.getContext('2d');
 
-    // Start both scanners
-    function startScanners() {
-      startBarcodeScanner();
-      startQRScanner();
-    }
-
-    // QuaggaJS for 1D Barcode Scanning
-    function startBarcodeScanner() {
+    function startScanner() {
+      // Initialize QuaggaJS for barcode scanning
       Quagga.init({
         inputStream: {
           type: "LiveStream",
           constraints: {
-            facingMode: "environment" // Use back camera
+            facingMode: "environment" // Use the back camera
           },
-          target: document.getElementById('scanner-container') // Attach the video stream
+          target: document.getElementById('scanner-container') // Attach the video stream here
         },
         decoder: {
           readers: [
@@ -63,54 +59,50 @@
       }, function (err) {
         if (err) {
           console.error(err);
-          output.textContent = "Unable to access the camera for barcode.";
+          output.textContent = "Unable to access the camera.";
           return;
         }
         Quagga.start();
         output.textContent = "Waiting for barcode or QR code...";
       });
 
+      // Detect barcodes using QuaggaJS
       Quagga.onDetected(function (data) {
         output.textContent = `Detected Barcode: ${data.codeResult.code}`;
-        Quagga.stop(); // Stop scanning after a barcode is detected
+        Quagga.stop(); // Stop scanning after detection
       });
+
+      // Use the video stream for QR code scanning
+      const video = document.querySelector("video");
+      if (video) {
+        scanQR(video);
+      }
     }
 
-    // jsQR for QR Code Scanning
-    async function startQRScanner() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment" // Use back camera
+    // QR code scanning function
+    function scanQR(video) {
+      function processFrame() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+          if (code) {
+            output.textContent = `Detected QR Code: ${code.data}`;
+            Quagga.stop(); // Stop barcode scanning
+            return;
           }
-        });
-        video.srcObject = stream;
-        video.play();
-        scanQR();
-      } catch (error) {
-        console.error("Error accessing the camera for QR code", error);
-        output.textContent = "Unable to access the camera for QR code.";
-      }
-    }
-
-    function scanQR() {
-      requestAnimationFrame(scanQR);
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-        if (code) {
-          output.textContent = `Detected QR Code: ${code.data}`;
         }
+        requestAnimationFrame(processFrame);
       }
+      processFrame();
     }
 
-    // Start both scanners
-    startScanners();
+    // Start the scanner
+    startScanner();
   </script>
 </body>
 </html>
