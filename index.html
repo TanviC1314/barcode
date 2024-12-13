@@ -9,9 +9,6 @@
       width: 100%;
       height: auto;
     }
-    canvas {
-      display: none;
-    }
     #output {
       font-size: 1.5rem;
       margin-top: 20px;
@@ -21,51 +18,44 @@
 </head>
 <body>
   <h1>Scan Barcode</h1>
-  <video id="video" autoplay></video>
-  <canvas id="canvas"></canvas>
+  <div id="scanner-container"></div>
   <div id="output">Waiting for barcode...</div>
 
-  <!-- Include the jsQR library -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+  <!-- Include QuaggaJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
     const output = document.getElementById('output');
-    const canvasContext = canvas.getContext('2d');
 
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { exact: "environment" } // Use back camera
-          }
-        });
-        video.srcObject = stream;
-        video.play();
-        scanBarcode();
-      } catch (error) {
-        console.error("Error accessing the camera", error);
-        output.textContent = "Unable to access the camera";
-      }
-    }
-
-    function scanBarcode() {
-      requestAnimationFrame(scanBarcode);
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-        if (code) {
-          output.textContent = `Barcode Value: ${code.data}`;
+    // Start the barcode scanner
+    function startBarcodeScanner() {
+      Quagga.init({
+        inputStream: {
+          type: "LiveStream",
+          constraints: {
+            facingMode: "environment" // Use the back camera
+          },
+          target: document.getElementById('scanner-container') // Attach the video stream
+        },
+        decoder: {
+          readers: ["code_128_reader", "ean_reader", "upc_reader"] // Supported barcode formats
         }
-      }
+      }, function (err) {
+        if (err) {
+          console.error(err);
+          output.textContent = "Unable to access the camera.";
+          return;
+        }
+        Quagga.start();
+        output.textContent = "Waiting for barcode...";
+      });
+
+      Quagga.onDetected(function (data) {
+        output.textContent = `Detected: ${data.codeResult.code}`;
+        Quagga.stop(); // Stop scanning after a barcode is detected
+      });
     }
 
-    startCamera();
+    startBarcodeScanner();
   </script>
 </body>
 </html>
