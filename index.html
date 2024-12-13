@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Barcode and QR Code Scanner</title>
+  <title>Fast Barcode and QR Code Scanner</title>
   <style>
     video {
       width: 100%;
@@ -20,7 +20,7 @@
   </style>
 </head>
 <body>
-  <h1>Scan Barcode or QR Code</h1>
+  <h1>Fast Barcode and QR Code Scanner</h1>
   <div id="scanner-container">
     <video id="video" autoplay></video>
   </div>
@@ -37,11 +37,14 @@
     const output = document.getElementById('output');
     const canvasContext = canvas.getContext('2d');
 
+    let frameCount = 0; // Frame skipping logic
+    let scanning = true;
+
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { exact: "environment" } // Use back camera
+            facingMode: "environment" // Use back camera
           }
         });
         video.srcObject = stream;
@@ -54,23 +57,32 @@
     }
 
     function scanCode() {
+      if (!scanning) return; // Stop processing if scanning is disabled
       requestAnimationFrame(scanCode);
 
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        // Draw video frame to canvas
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frameCount++;
+      if (frameCount % 3 !== 0) return; // Process every 3rd frame for better performance
 
-        // Scan for QR Code
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        const qrCode = jsQR(imageData.data, canvas.width, canvas.height);
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // Reduce canvas size for faster processing
+        const canvasWidth = video.videoWidth / 2;
+        const canvasHeight = video.videoHeight / 2;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        canvasContext.drawImage(video, 0, 0, canvasWidth, canvasHeight);
+
+        const imageData = canvasContext.getImageData(0, 0, canvasWidth, canvasHeight);
+
+        // Prioritize QR Code detection
+        const qrCode = jsQR(imageData.data, canvasWidth, canvasHeight);
         if (qrCode) {
           output.textContent = `QR Code Detected: ${qrCode.data}`;
+          scanning = false; // Stop scanning after detection
+          Quagga.stop();
           return;
         }
 
-        // Start scanning for 1D Barcodes using QuaggaJS
+        // Scan for 1D Barcodes with QuaggaJS
         Quagga.decodeSingle({
           decoder: {
             readers: ["code_128_reader", "code_39_reader", "ean_reader", "upc_reader"]
@@ -80,15 +92,25 @@
         }, function (result) {
           if (result && result.codeResult) {
             output.textContent = `Barcode Detected: ${result.codeResult.code}`;
+            scanning = false; // Stop scanning after detection
+            Quagga.stop();
             return;
-          } else {
-            output.textContent = "Waiting for code...";
           }
         });
       }
     }
 
     startCamera();
+
+    // Restart scanning after detection
+    document.body.addEventListener("click", () => {
+      if (!scanning) {
+        output.textContent = "Waiting for code...";
+        scanning = true;
+        Quagga.start();
+        scanCode();
+      }
+    });
   </script>
 </body>
 </html>
